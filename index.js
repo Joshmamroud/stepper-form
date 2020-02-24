@@ -22,7 +22,7 @@ class StepperForm {
 
   _handleSubmit(event) {
     event.preventDefault();
-    if (this.currentStep.isValid) {
+    if (this.step.isValid) {
       // Do submit
     }
   }
