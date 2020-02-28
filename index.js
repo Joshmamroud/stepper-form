@@ -1,23 +1,27 @@
 class StepperForm {
-  constructor(formElement) {
-    this.form = formElement;
-    this.steps = [];
-    this.form.querySelectorAll(".step").forEach((node, index) => this.steps.push(new Step(node, index)));
-    this.nextButtons = this.form.querySelectorAll("button.next, a.next");
-    this.prevButtons = this.form.querySelectorAll("button.prev, a.next");
-    this.submitButtons = this.form.querySelectorAll("button.submit, a.submit");
+  constructor(element) {
+    this.element = element;
+    this.stepElements = element.querySelectorAll('.sf-step');
+    this.nextBtnElements = element.querySelectorAll('button.sf-next, a.sf-next');
+    this.prevBtnElements = element.querySelectorAll('button.sf-prev, a.sf-next');
+    this.submitBtnElements = element.querySelectorAll('button.sf-submit, a.sf-submit');
+    this.indicatorElement = element.querySelector('.sf-indicators');
     this.init();
   }
 
   init() {
+    this.steps = StepperForm.createSteps(this.stepElements);
+    this.indicatorElements = StepperForm.getIndicatorElements(this.steps);
+    this.indicatorElement.appendChild(StepperForm.createIndicatorListElement(this.indicatorElements));
     this._bindUIActions();
-    this.currentStep = 0;
+    this.step = this.steps[0];
   }
 
   _bindUIActions() {
-    this._addEventListeners([this.form], "submit", this._handleSubmit, this);
-    this._addEventListeners(this.nextButtons, "click", this.nextStep, this);
-    this._addEventListeners(this.prevButtons, "click", this.prevStep, this);
+    StepperForm._addEventListeners([this.element], 'submit', this._handleSubmit, this);
+    StepperForm._addEventListeners(this.nextBtnElements, 'click', this.nextStep, this);
+    StepperForm._addEventListeners(this.prevBtnElements, 'click', this.prevStep, this);
+    StepperForm._addEventListeners(this.indicatorElements, 'click', this._handleIndicatorClick, this);
   }
 
   _handleSubmit(event) {
@@ -27,73 +31,131 @@ class StepperForm {
     }
   }
 
-  nextStep() {
-    if (!this.step.isValid) return;
-    this.currentStep = this.currentStep + 1;
-  }
-
-  prevStep() {
-    this.currentStep = this.currentStep - 1;
+  _handleIndicatorClick(event) {
+    const indicator = event.currentTarget;
+    this.currentStep = parseInt(indicator.dataset.step);
   }
 
   set currentStep(index) {
-    if (!this.steps[index]) return;
-    this.updateNavigation(index);
-    this.step = this.steps[index];
-    this.steps.forEach(step => step.hide());
-    this.step.show();
+    const step = this.steps[index];
+    if (index == undefined || !this.steps.length || !step || (this.step.index < index && !this.step.isValid)) return;
+    this.steps.forEach(step => (step.isActive = false));
+    this.step = step;
+    this.step.isActive = true;
+    this.updateControls(index);
   }
 
   get currentStep() {
-    return this.step.index;
+    return this.step ? this.step.index : null;
   }
 
-  updateNavigation(step) {
-    this.prevButtons.forEach(button => {
-      step === 0 ? button.classList.add("d-none") : button.classList.remove("d-none");
+  // Controls
+  nextStep() {
+    if (!this.step.isValid) return;
+    this.currentStep++;
+  }
+
+  prevStep() {
+    this.currentStep--;
+  }
+
+  updateControls(step) {
+    this.prevBtnElements.forEach(button => {
+      step === 0 ? button.classList.add('d-none') : button.classList.remove('d-none');
     });
-    this.nextButtons.forEach(button => {
-      step < this.steps.length - 1 ? button.classList.remove("d-none") : button.classList.add("d-none");
+    this.nextBtnElements.forEach(button => {
+      step < this.steps.length - 1 ? button.classList.remove('d-none') : button.classList.add('d-none');
     });
-    this.submitButtons.forEach(button => {
-      step === this.steps.length - 1 ? button.classList.remove("d-none") : button.classList.add("d-none");
+    this.submitBtnElements.forEach(button => {
+      step === this.steps.length - 1 ? button.classList.remove('d-none') : button.classList.add('d-none');
     });
   }
 
-  _addEventListeners(nodeList, eventName, fn, self) {
+  // Static Methods
+  static createSteps(stepElements) {
+    if (!stepElements || !stepElements.length) return [];
+    const steps = [];
+    stepElements.forEach((element, index) => steps.push(new Step(element, index)));
+    return steps;
+  }
+
+  static createIndicatorListElement(indicatorElements) {
+    const indicatorListElement = document.createElement('ul');
+    indicatorElements.forEach(element => {
+      indicatorListElement.appendChild(element);
+    });
+
+    return indicatorListElement;
+  }
+
+  static getIndicatorElements(steps) {
+    return steps.map(step => step.indicatorElement);
+  }
+
+  static _addEventListeners(elementList, eventName, fn, self) {
     fn = self ? fn.bind(self) : fn;
-    nodeList.forEach(node => {
-      node.addEventListener(eventName, fn);
+    elementList.forEach(element => {
+      element.addEventListener(eventName, fn);
     });
   }
 }
 
 class Step {
-  constructor(node, index) {
-    this.node = node;
-    this.inputs = node.querySelectorAll("input");
+  constructor(element, index) {
+    this.element = element;
+    this.inputElements = element.querySelectorAll('input');
     this.index = index;
+    this.name = element.dataset.name || `Step ${index + 1}`;
+    this.indicatorElement = Step.createIndicatorElement(this.index, this.name);
+    this.active = false;
     this.valid = true;
+    this.complete = false;
   }
 
-  show() {
-    this.node.classList.remove("d-none");
+  set isActive(value) {
+    this.active = value;
+    if (value) {
+      this.element.classList.remove('d-none');
+      this.indicatorElement.classList.add('active');
+    } else {
+      this.element.classList.add('d-none');
+      this.indicatorElement.classList.remove('active');
+    }
   }
 
-  hide() {
-    this.node.classList.add("d-none");
+  get isActive() {
+    return this.active;
   }
 
   get isValid() {
     this._validate();
     return this.valid;
   }
-
   set isValid(value) {}
+
+  static createIndicatorElement(index, name) {
+    const indicatorElement = document.createElement('li');
+    indicatorElement.classList.add('sf-indicator');
+    indicatorElement.dataset.step = index;
+
+    // Indicator Number
+    const numberElement = document.createElement('span');
+    numberElement.textContent = index + 1;
+    numberElement.classList.add('sf-indicator-number');
+    indicatorElement.appendChild(numberElement);
+
+    // Indicator Name
+    const nameElement = document.createElement('span');
+    nameElement.textContent = name;
+    nameElement.classList.add('sf-indicator-name');
+    indicatorElement.appendChild(nameElement);
+
+    return indicatorElement;
+  }
 
   _validate() {
     this.valid = true;
-    this.inputs.forEach(input => {
+    this.inputElements.forEach(input => {
       const { valid } = input.validity;
       if (!valid) input.reportValidity();
       this.valid = valid ? this.valid : false;
@@ -101,7 +163,7 @@ class Step {
   }
 }
 
-window.addEventListener("load", function() {
-  const formElement = document.querySelector("form.stepper-form");
+window.addEventListener('load', function() {
+  const formElement = document.querySelector('form.sf-form');
   const stepperForm = new StepperForm(formElement);
 });
